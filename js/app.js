@@ -10,9 +10,11 @@
     const macroKeys = ["gdp", "inflation", "unemployment", "exportsShare"];
     const tradeKeys = ["exportsValue", "importsValue", "exportsShare"];
     const financeKeys = ["governmentDebt", "currentAccount", "imfGdp", "imfInflation", "imfUnemployment", "externalDebt", "reserves", "domesticCredit", "broadMoney", "realInterest"];
+    const globeReportKeys = Object.keys(config.indicators);
     let activeMapRegion = "";
     let selectedYear = config.endYear;
     let selectedMapCountry = config.defaultCountry;
+    let selectedMapName = "";
     const mapSelectedCountries = [];
     let comparisonPickerRender = null;
     let dataReady = false;
@@ -47,6 +49,21 @@
 
     function pointForYear(key, countryCode) {
         return data.valueForYear(key, countryCode, selectedYear);
+    }
+
+    function normalizeCountryName(value) {
+        return String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+            .toLocaleLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+
+    function globalCountry(countryCode, countryName) {
+        const globalData = window.EconIntel.GlobalData;
+        if (!globalData) return null;
+        if (countryCode && globalData.state.byCode[countryCode]) return globalData.state.byCode[countryCode];
+        const name = normalizeCountryName(countryName);
+        return name
+            ? Object.values(globalData.state.byCode).find(country => normalizeCountryName(country.name) === name) || null
+            : null;
     }
 
     function fillYearSelect() {
@@ -176,10 +193,21 @@
 
     function addComparisonCountry(code, mapName) {
         const country = code && data.state.countries[code];
+        const profile = code && globalCountry(code);
         if (!country) {
-            $("globeStatus").textContent = `${mapName} is not available in the World Bank country directory.`;
+            selectedMapCountry = code || "";
+            selectedMapName = mapName;
+            $("mapRegionLabel").textContent = profile
+                ? [profile.region, profile.subregion].filter(Boolean).join(" · ") || "Region unavailable"
+                : "Country profile";
+            if (window.EconIntel.Globe) window.EconIntel.Globe.setFocusedCountry(code || "");
+            renderMapCountry(code || "", mapName);
+            $("globeStatus").textContent = profile
+                ? `${profile.name} selected · not available in the World Bank comparison directory.`
+                : `${mapName} selected · source details unavailable.`;
             return;
         }
+        selectedMapName = country.name;
         const alreadyAdded = comparison.countries.includes(code);
         const alreadySelectedOnMap = mapSelectedCountries.includes(code);
         if (!alreadyAdded) {
@@ -460,30 +488,160 @@
         renderMapCountry();
     }
 
-    function renderMapCountry() {
-        const code = $("mapCountry").value;
+    function renderMapCountry(codeOverride, fallbackName) {
+        const code = codeOverride === undefined ? $("mapCountry").value : codeOverride;
         const country = data.state.countries[code];
-        if (!country) {
-            $("mapCountryDetails").innerHTML = "<p class='empty-state'>No country is available in this region from the country directory.</p>";
-            $("overviewCountryDetails").innerHTML = "<p class='empty-state'>No source country record is available for this selection.</p>";
+        const profile = globalCountry(code, fallbackName || selectedMapName);
+        const displayCountry = country || profile;
+        if (!displayCountry) {
+            const name = fallbackName || selectedMapName;
+            const unavailableRows = ["Capital", "Region", "Population", "Area", "Currency", "GDP", "GDP per capita"]
+                .map(label => `<div class="map-profile-row"><span>${label}</span><b>Unavailable</b></div>`).join("");
+            $("mapCountryDetails").innerHTML = `<div class="map-country-heading"><strong>${util.escape(name || "Country details")}</strong><span>—</span></div>
+                <div class="map-profile-list">${unavailableRows}</div><p class="empty-state">No matching source country record is available.</p>`;
+            $("mapCompareLink").hidden = true;
+            if (!name) $("overviewCountryDetails").innerHTML = "<p class='empty-state'>No source country record is available for this selection.</p>";
             return;
         }
+        if (!country) {
+            const unavailable = value => value === null || value === undefined || value === "" ? "Unavailable" : value;
+            const population = profile.population
+                ? `${Number(profile.population.value).toLocaleString("en-US")}${profile.population.year ? ` · ${profile.population.year}` : ""}`
+                : profile.restPopulation !== null
+                    ? Number(profile.restPopulation).toLocaleString("en-US")
+                    : null;
+            const currencies = (profile.currencyCodes || []).map((currencyCode, index) =>
+                [currencyCode, profile.currencies && profile.currencies[index]].filter(Boolean).join(" · ")
+            ).join(", ");
+            const profileRows = [
+                ["Capital", unavailable(profile.capital)],
+                ["Region", unavailable([profile.region, profile.subregion].filter(Boolean).join(" · "))],
+                ["Population", unavailable(population)],
+                ["Area", profile.area === null || profile.area === undefined ? "Unavailable" : `${Number(profile.area).toLocaleString("en-US")} km²`],
+                ["Currency", unavailable(currencies)],
+                ["GDP", profile.gdp ? `${util.money(profile.gdp.value)} · ${profile.gdp.year}` : "Unavailable"],
+                ["GDP per capita", profile.gdpPerCapita ? `${util.money(profile.gdpPerCapita.value)} · ${profile.gdpPerCapita.year}` : "Unavailable"]
+            ].map(([label, value]) => `<div class="map-profile-row"><span>${util.escape(label)}</span><b>${util.escape(value)}</b></div>`).join("");
+            $("mapCountryDetails").innerHTML = `<div class="map-country-heading"><strong>${util.escape(displayCountry.name)}</strong><span>${util.escape(code.startsWith("name:") ? "—" : code)}</span></div>
+                <div class="map-profile-list">${profileRows}</div><p class="empty-state">Economic comparison indicators are unavailable for this country.</p>`;
+            $("mapCompareLink").hidden = true;
+            if (window.EconIntel.Globe) window.EconIntel.Globe.setFocusedCountry(code);
+            return;
+        }
+        $("mapCompareLink").hidden = false;
         $("overviewCountrySelect").value = code;
         $("overviewCountryName").textContent = country.name;
         $("overviewCountryRegion").textContent = country.region;
         $("overviewCountryCode").textContent = country.code;
         if (window.EconIntel.Globe) window.EconIntel.Globe.setFocusedCountry(code);
         if (window.EconIntel.IntelligenceMap) window.EconIntel.IntelligenceMap.setSelectedCountry(code);
+
+        const unavailable = value => value === null || value === undefined || value === "" ? "Unavailable" : value;
+        const population = profile && profile.population
+            ? `${Number(profile.population.value).toLocaleString("en-US")}${profile.population.year ? ` · ${profile.population.year}` : ""}`
+            : profile && profile.restPopulation !== null
+                ? Number(profile.restPopulation).toLocaleString("en-US")
+                : null;
+        const currencies = profile && (profile.currencyCodes || []).map((currencyCode, index) =>
+            [currencyCode, profile.currencies && profile.currencies[index]].filter(Boolean).join(" · ")
+        ).join(", ");
+        const profileRows = [
+            ["Capital", unavailable(profile && profile.capital)],
+            ["Region", unavailable(profile ? [profile.region, profile.subregion].filter(Boolean).join(" · ") : country.region)],
+            ["Population", unavailable(population)],
+            ["Area", !profile || profile.area === null || profile.area === undefined ? "Unavailable" : `${Number(profile.area).toLocaleString("en-US")} km²`],
+            ["Currency", unavailable(currencies)],
+            ["GDP", profile && profile.gdp ? `${util.money(profile.gdp.value)} · ${profile.gdp.year}` : "Unavailable"],
+            ["GDP per capita", profile && profile.gdpPerCapita ? `${util.money(profile.gdpPerCapita.value)} · ${profile.gdpPerCapita.year}` : "Unavailable"]
+        ].map(([label, value]) => `<div class="map-profile-row"><span>${util.escape(label)}</span><b>${util.escape(value)}</b></div>`).join("");
         const keys = ["gdp", "inflation", "unemployment", "exportsShare"];
         const rows = keys.map(key => {
-                const point = pointForYear(key, code);
-                return `<div class="map-data-row"><span>${util.escape(config.indicators[key].label)}</span><b>${point ? util.escape(formatValue(point.value, config.indicators[key].unit)) : "–"}</b><small>${point ? point.year : ""}</small></div>`;
-            }).join("");
+            const point = pointForYear(key, code);
+            return `<div class="map-data-row"><span>${util.escape(config.indicators[key].label)}</span><b>${point ? util.escape(formatValue(point.value, config.indicators[key].unit)) : "Unavailable"}</b><small>${point ? point.year : ""}</small></div>`;
+        }).join("");
         $("mapCountryDetails").innerHTML = `<div class="map-country-heading"><strong>${util.escape(country.name)}</strong><span>${util.escape(country.code)}</span></div>
-            <p class="map-region-text">${util.escape(country.region)}</p>${rows}`;
+            <div class="map-profile-list">${profileRows}</div><p class="map-economy-heading">Economic indicators</p>${rows}`;
         $("overviewCountryDetails").innerHTML = rows;
         $("mapCompareLink").dataset.country = country.code;
         $("overviewCompareLink").dataset.country = country.code;
+    }
+
+    function globeExportData() {
+        const code = selectedMapCountry || $("mapCountry").value || config.defaultCountry;
+        const country = data.state.countries[code] || null;
+        const profile = globalCountry(code, selectedMapName) || {};
+        const name = country && country.name || profile.name || selectedMapName || code;
+        const indicators = globeReportKeys.map(key => {
+            const indicator = config.indicators[key];
+            const selected = pointForYear(key, code);
+            return {
+                key,
+                label: indicator.label,
+                unit: indicator.unit,
+                source: sourceName(key),
+                sourceCode: indicator.code,
+                selectedYear: selectedYear,
+                selectedValue: selected ? selected.value : null,
+                latest: data.latest(key, code),
+                history: data.series(key, code).filter(point => point.value !== null && Number.isFinite(point.value))
+            };
+        });
+        const currencies = (profile.currencyCodes || []).map((currencyCode, index) =>
+            [currencyCode, profile.currencies && profile.currencies[index]].filter(Boolean).join(" · ")
+        ).filter(Boolean);
+        const population = profile.population && profile.population.value !== null
+            ? profile.population.value
+            : profile.restPopulation;
+        const populationValue = population !== null && population !== undefined && Number.isFinite(Number(population))
+            ? Number(population)
+            : null;
+        const areaValue = profile.area !== null && profile.area !== undefined && Number.isFinite(Number(profile.area))
+            ? Number(profile.area)
+            : null;
+        const sourceUrl = code && !code.startsWith("name:")
+            ? `https://api.worldbank.org/v2/country/${encodeURIComponent(code)}/indicator/`
+            : "https://data.worldbank.org/";
+        const hostname = window.location.hostname.toLocaleLowerCase();
+        const localHost = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1" || hostname.endsWith(".localhost");
+        const liveUrl = !localHost && (window.location.protocol === "https:" || window.location.protocol === "http:")
+            ? new URL("#world-map", window.location.href).href
+            : null;
+        return {
+            country: {
+                code,
+                name,
+                flagUrl: profile.flagUrl || null,
+                flagEmoji: profile.flagEmoji || "",
+                capital: profile.capital || null,
+                region: [profile.region || country && country.region, profile.subregion].filter(Boolean).join(" · ") || null,
+                population: populationValue,
+                populationYear: profile.population && profile.population.year || null,
+                area: areaValue,
+                currencies,
+                gdp: profile.gdp && profile.gdp.value !== null ? profile.gdp.value : null,
+                gdpYear: profile.gdp && profile.gdp.year || null,
+                gdpPerCapita: profile.gdpPerCapita && profile.gdpPerCapita.value !== null ? profile.gdpPerCapita.value : null,
+                gdpPerCapitaYear: profile.gdpPerCapita && profile.gdpPerCapita.year || null,
+                officialName: profile.officialName || null
+            },
+            indicators,
+            selectedYear,
+            viewMode: window.EconIntel.Globe ? window.EconIntel.Globe.getView() : "globe",
+            generatedAt: new Date().toISOString(),
+            liveUrl,
+            sources: [
+                ...indicators.filter((indicator, index, list) =>
+                    list.findIndex(candidate => candidate.sourceCode === indicator.sourceCode) === index
+                ).map(indicator => ({
+                    label: `World Bank · ${indicator.label}`,
+                    url: sourceUrl === "https://data.worldbank.org/"
+                        ? sourceUrl
+                        : `${sourceUrl}${encodeURIComponent(indicator.sourceCode)}?format=json`
+                })),
+                { label: "REST Countries dataset", url: "https://github.com/mledoze/countries" },
+                { label: "Natural Earth boundaries", url: "https://www.naturalearthdata.com/" }
+            ]
+        };
     }
 
     function renderReports() {
@@ -612,12 +770,12 @@
                 td small, th small { display: block; color: #657382; margin-top: 3px; }
                 .note { margin-top: 16px; color: #657382; font-size: 9px; }
             </style></head><body>
-            <h1>ECON Intelligence · Word report</h1>
+            <h1>ECON Intelligence · Word-compatible HTML report</h1>
             <p class="subtitle">Selected year: ${selectedYear} · Exported: ${new Date().toLocaleString()}</p>
             <table><thead><tr><th>Country</th>${indicatorKeys.map(key => `<th>${util.escape(config.indicators[key].label)}<small>${util.escape(config.indicators[key].unit)}</small></th>`).join("")}</tr></thead><tbody>${tableRows}</tbody></table>
             <p class="note">Source observations only. Missing values remain unavailable; no estimates or projections are synthesized. World Bank and IMF methodologies may differ.</p>
             </body></html>`;
-            downloadFile(`econ-intelligence-report-${selectedYear}.doc`, html, "application/msword;charset=utf-8");
+            downloadFile(`econ-intelligence-report-${selectedYear}.html`, html, "text/html;charset=utf-8");
             return;
         }
     }
@@ -713,9 +871,24 @@
     function activateView(viewId) {
         const target = $(viewId);
         if (!target || !target.classList.contains("view")) return;
-        if (["world-leaders", "government-systems", "population", "country-database"].includes(viewId)
+        if (["world-leaders", "government-systems", "population", "country-database", "world-map"].includes(viewId)
             && window.EconIntel.GlobalModules) {
-            window.EconIntel.GlobalModules.init();
+            window.EconIntel.GlobalModules.init().then(() => {
+                if (viewId !== "world-map" || $("world-map").hidden) return;
+                if (window.EconIntel.Globe) {
+                    window.EconIntel.Globe.refreshCountries();
+                    if (selectedMapCountry.startsWith("name:")) {
+                        const resolved = window.EconIntel.Globe.resolveCountryCode(selectedMapName);
+                        if (resolved && !resolved.startsWith("name:")) selectedMapCountry = resolved;
+                    }
+                    window.EconIntel.Globe.setFocusedCountry(selectedMapCountry);
+                }
+                const profile = globalCountry(selectedMapCountry, selectedMapName);
+                if (!data.state.countries[selectedMapCountry] && profile) {
+                    $("mapRegionLabel").textContent = [profile.region, profile.subregion].filter(Boolean).join(" · ") || "Region unavailable";
+                }
+                renderMapCountry(selectedMapCountry, selectedMapName);
+            });
         }
         if (viewId === "organizations" && window.EconIntel.Organizations) {
             window.EconIntel.Organizations.init();
@@ -746,6 +919,7 @@
         $("compareIndicator").addEventListener("change", renderComparison);
         $("mapCountry").addEventListener("change", () => {
             selectedMapCountry = $("mapCountry").value || config.defaultCountry;
+            selectedMapName = data.state.countries[selectedMapCountry]?.name || "";
             $("overviewCountrySelect").value = selectedMapCountry;
             renderMapCountry();
             renderDashboard();
@@ -879,6 +1053,12 @@
             });
         } else {
             $("globeStatus").textContent = "Interactive globe unavailable · Use the country selector instead";
+        }
+        if (window.EconIntel.GlobeExport) {
+            window.EconIntel.GlobeExport.mount({
+                getReport: globeExportData,
+                getVisualization: () => window.EconIntel.Globe.exportSvg()
+            });
         }
         renderAll();
         mountOverviewMap();

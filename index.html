@@ -26,6 +26,7 @@
     <script defer src="js/global-data.js"></script>
     <script defer src="js/organizations.js"></script>
     <script defer src="js/global-modules.js"></script>
+    <script defer src="js/globe-export.js"></script>
     <script defer src="js/app.js"></script>
 </head>
 <body>
@@ -245,27 +246,78 @@
                 </section>
 
                 <section class="view" id="world-map" aria-labelledby="mapTitle" hidden>
-                    <div class="page-heading"><div><p class="eyebrow">INTERACTIVE WORLD MAP <span class="eyebrow-line"></span></p><h1 id="mapTitle">Explore & compare countries</h1><p class="page-intro">Rotate the globe, hover to identify a country, and click to add it to your comparison.</p></div></div>
+                    <div class="page-heading"><div><p class="eyebrow">INTERACTIVE WORLD MAP <span class="eyebrow-line"></span></p><h1 id="mapTitle">Explore & compare countries</h1><p class="page-intro">Rotate and zoom the globe to inspect countries, then select one for its source data profile.</p></div></div>
                     <section class="panel map-panel">
                         <div class="map-heading"><div><p class="eyebrow">COUNTRY SELECTOR</p><h2>Interactive country globe</h2></div><span class="panel-badge">NATURAL EARTH BOUNDARIES</span></div>
                         <div class="map-layout">
                             <div class="map-canvas">
+                                <div class="globe-toolbar" aria-label="Globe zoom controls">
+                                    <div class="globe-view-switch" role="group" aria-label="Map view">
+                                        <button class="globe-control-button is-active" id="globeView3d" type="button" aria-pressed="true">3D Globe</button>
+                                        <button class="globe-control-button" id="globeView2d" type="button" aria-pressed="false">2D Map</button>
+                                    </div>
+                                    <div class="globe-zoom-buttons" role="group" aria-label="Zoom controls">
+                                        <button class="globe-control-button" id="globeZoomOut" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+                                        <button class="globe-control-button" id="globeZoomIn" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+                                    </div>
+                                    <output class="globe-zoom-level" id="globeZoomLevel" aria-live="polite">100%</output>
+                                    <button class="globe-control-button globe-reset-button" id="globeResetView" type="button">Reset view</button>
+                                </div>
                                 <div class="globe-wrap" id="globeWrap">
-                                    <svg class="country-globe" id="countryGlobe" viewBox="0 0 960 600" role="group" aria-label="Interactive globe. Drag to rotate; focus a country and press Enter to add it to comparison.">
-                                        <text class="globe-loading" x="480" y="300" text-anchor="middle">Loading country boundaries…</text>
+                                    <svg class="country-globe" id="countryGlobe" viewBox="0 0 960 960" role="group" aria-label="Interactive globe. Drag to rotate, use the zoom controls to inspect countries, and select a country for details.">
+                                        <text class="globe-loading" x="480" y="480" text-anchor="middle">Loading country boundaries…</text>
                                     </svg>
                                     <div class="globe-tooltip" id="globeTooltip" role="tooltip" hidden></div>
                                 </div>
-                                <div class="map-legend"><span><i></i> Click a country to add it to comparison</span><span>Map data: Natural Earth · Public domain</span></div>
-                                <p class="globe-status" id="globeStatus" role="status" aria-live="polite">Drag to rotate · Hover to see a country name · Click to add</p>
+                                <div class="map-legend"><span><i></i> Select a country for its profile · World Bank countries join comparison</span><span>Map data: Natural Earth · Public domain</span></div>
+                                <p class="globe-status" id="globeStatus" role="status" aria-live="polite">Drag to rotate · Scroll or pinch to zoom · Select a country for details</p>
                             </div>
                             <div class="map-details">
                                 <label>Country<select id="mapCountry" class="select-control country-select"></select></label>
                                 <div class="map-region-label" id="mapRegionLabel">Select a country on the globe</div>
-                                <div id="mapCountryDetails" class="map-country-details"><p class="empty-state">Click a country to add it to comparison and inspect its selected-year data.</p></div>
+                                <div id="mapCountryDetails" class="map-country-details" aria-live="polite"><p class="empty-state">Select a country on the globe to view its profile and available economic indicators.</p></div>
                                 <a class="text-link" id="mapCompareLink" href="#countries" data-view="countries">Open country comparison <span aria-hidden="true">→</span></a>
                             </div>
                         </div>
+                        <section class="globe-export-section" aria-labelledby="globeExportHeading">
+                            <div class="globe-export-header">
+                                <div><p class="eyebrow">REPORT BUILDER</p><h3 id="globeExportHeading">Export country intelligence</h3><p class="panel-description">Build a branded report for the currently selected country and map view.</p></div>
+                                <button class="button button-secondary" id="globeExportToggle" type="button" aria-expanded="false" aria-controls="globeExportCenter"><span aria-hidden="true">↓</span> Export / Download</button>
+                            </div>
+                            <div class="globe-export-center" id="globeExportCenter" hidden>
+                                <form id="globeExportForm">
+                                    <div class="globe-export-settings">
+                                        <label class="globe-export-format">File format
+                                            <select class="select-control" id="globeExportFormat">
+                                                <option value="pdf">PDF</option>
+                                                <option value="docx">Microsoft Word (.docx)</option>
+                                                <option value="pptx">PowerPoint (.pptx)</option>
+                                                <option value="html">Interactive HTML report</option>
+                                            </select>
+                                        </label>
+                                        <fieldset class="globe-export-options">
+                                            <legend>Include sections</legend>
+                                            <label><input type="checkbox" name="globeExportSection" value="profile" checked> Country profile</label>
+                                            <label><input type="checkbox" name="globeExportSection" value="geography" checked> Geographic information</label>
+                                            <label><input type="checkbox" name="globeExportSection" value="economy" checked> Economic indicators</label>
+                                            <label><input type="checkbox" name="globeExportSection" value="charts" checked> Charts and statistics</label>
+                                            <label><input type="checkbox" name="globeExportSection" value="visualization" checked> Current map visualization</label>
+                                        </fieldset>
+                                    </div>
+                                    <fieldset class="globe-export-charts" id="globeExportCharts">
+                                        <legend>Charts to include</legend>
+                                        <label><input type="checkbox" name="globeExportChart" value="gdp" checked> GDP growth</label>
+                                        <label><input type="checkbox" name="globeExportChart" value="inflation" checked> Inflation</label>
+                                        <label><input type="checkbox" name="globeExportChart" value="unemployment" checked> Unemployment</label>
+                                        <label><input type="checkbox" name="globeExportChart" value="exportsShare" checked> Exports of GDP</label>
+                                    </fieldset>
+                                    <div class="globe-export-actions">
+                                        <button class="button button-primary" id="globeExportGenerate" type="submit">Generate report</button>
+                                        <span class="globe-export-status" id="globeExportStatus" role="status" aria-live="polite"></span>
+                                    </div>
+                                </form>
+                            </div>
+                        </section>
                         <p class="source-note">Country outlines: <a href="https://www.naturalearthdata.com/" target="_blank" rel="noopener noreferrer">Natural Earth</a>. Indicator coverage and comparison codes come from the World Bank country directory.</p>
                     </section>
                 </section>
@@ -366,7 +418,7 @@
                     <section class="panel report-panel">
                         <div class="panel-heading"><div><p class="eyebrow">LOCAL DATA SNAPSHOT</p><h2>Download a report</h2></div><span class="panel-badge" id="reportDataStatus">CHECKING DATA</span></div>
                         <div class="report-stats" id="reportStats"></div>
-                        <div class="report-actions"><button class="button button-primary" id="downloadReportCsv" type="button"><span aria-hidden="true">↓</span> Export selected countries · CSV</button><button class="button button-secondary" id="downloadReportJson" type="button"><span aria-hidden="true">↓</span> Export selected countries · JSON</button><button class="button button-secondary" id="printReport" type="button"><span aria-hidden="true">▧</span> Download report · PDF / PPT / Word</button></div>
+                        <div class="report-actions"><button class="button button-primary" id="downloadReportCsv" type="button"><span aria-hidden="true">↓</span> Export selected countries · CSV</button><button class="button button-secondary" id="downloadReportJson" type="button"><span aria-hidden="true">↓</span> Export selected countries · JSON</button><button class="button button-secondary" id="printReport" type="button"><span aria-hidden="true">▧</span> Download report · PDF / PPT / HTML</button></div>
                         <p class="data-caveat">Exports contain observations already loaded from World Bank and IMF endpoints. Missing values remain blank; no projections are synthesized by this app.</p>
                     </section>
                     <section class="panel methodology-panel spaced-panel"><p class="eyebrow">SOURCE NOTES</p><h2>Provenance before interpretation</h2><p class="panel-description">World Bank and IMF datasets use different methodologies and reporting calendars. Confirm the indicator definition, unit, source, and year before comparing values. Forecasting, news ingestion, and AI analysis require separate providers and are not represented as connected.</p><div class="source-grid"><a class="source-card" href="https://data.worldbank.org/" target="_blank" rel="noopener noreferrer"><span class="source-logo wb-logo" aria-hidden="true">W</span><span><strong>World Bank Open Data</strong><small>Country, macroeconomic, and trade observations.</small></span><b aria-hidden="true">↗</b></a><a class="source-card" href="https://www.imf.org/en/Data" target="_blank" rel="noopener noreferrer"><span class="source-logo imf-logo" aria-hidden="true">IMF</span><span><strong>IMF Data</strong><small>World Economic Outlook and DataMapper datasets.</small></span><b aria-hidden="true">↗</b></a></div></section>
@@ -392,7 +444,7 @@
             <div class="export-format-options">
                 <button type="submit" value="pdf" class="export-format-option"><span class="format-icon pdf">PDF</span><strong>PDF document</strong><small>Portable, print-ready report</small></button>
                 <button type="submit" value="pptx" class="export-format-option"><span class="format-icon ppt">PPT</span><strong>PowerPoint</strong><small>Presentation-ready slides</small></button>
-                <button type="submit" value="doc" class="export-format-option"><span class="format-icon doc">DOC</span><strong>Word document</strong><small>Editable document</small></button>
+                <button type="submit" value="doc" class="export-format-option"><span class="format-icon doc">HTML</span><strong>Word-compatible HTML</strong><small>HTML file · not a DOCX package</small></button>
             </div>
         </form>
     </dialog>

@@ -715,29 +715,36 @@
         }
     }
 
-    async function init() {
-        if (state.initialized || state.initializing) return;
+    let initializationPromise = null;
+
+    function init() {
+        if (state.initialized) return Promise.resolve();
+        if (initializationPromise) return initializationPromise;
         state.initializing = true;
         ["leadersStatus", "systemsCountries", "countryDirectory"].forEach(id => {
             const element = $(id);
             if (element) element.setAttribute("aria-busy", "true");
         });
-        try {
-            await data.load();
-            state.loaded = true;
-            state.initialized = true;
-            prepareViews();
-        } catch (error) {
-            console.error("Global intelligence modules could not initialize:", error);
-            ["leadersStatus", "systemsCountries", "countryDirectory", "populationSource"].forEach(id => {
-                if ($(id)) $(id).textContent = `Global data unavailable: ${error.message}`;
-            });
-        } finally {
-            state.initializing = false;
-            ["leadersStatus", "systemsCountries", "countryDirectory"].forEach(id => {
-                if ($(id)) $(id).removeAttribute("aria-busy");
-            });
-        }
+        initializationPromise = (async () => {
+            try {
+                await data.load();
+                state.loaded = true;
+                state.initialized = true;
+                prepareViews();
+            } catch (error) {
+                console.error("Global intelligence modules could not initialize:", error);
+                ["leadersStatus", "systemsCountries", "countryDirectory", "populationSource"].forEach(id => {
+                    if ($(id)) $(id).textContent = `Global data unavailable: ${error.message}`;
+                });
+            } finally {
+                state.initializing = false;
+                ["leadersStatus", "systemsCountries", "countryDirectory"].forEach(id => {
+                    if ($(id)) $(id).removeAttribute("aria-busy");
+                });
+                if (!state.initialized) initializationPromise = null;
+            }
+        })();
+        return initializationPromise;
     }
 
     window.EconIntel.GlobalModules = { init, refreshPoliticalViews };
