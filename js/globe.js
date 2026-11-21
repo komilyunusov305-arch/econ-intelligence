@@ -15,6 +15,10 @@
     let focusedCode = "";
     let rotation = [-10, -10, 0];
     let drag = null;
+    let zoom = 1;
+    let pinch = null;
+    let resizeFrame = 0;
+    const activePointers = new Map();
     let suppressClick = false;
 
     const aliases = {
@@ -83,13 +87,37 @@
     }
 
     function configureProjection() {
+        const mobile = window.matchMedia("(max-width: 760px)").matches;
+        const width = 960;
+        const height = mobile ? 820 : 600;
+        zoom = clampZoom(zoom);
+        svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+        const scale = mobile ? Math.min(width * .42, height * .44) : 248;
         projection = window.d3.geoOrthographic()
-            .scale(248)
-            .translate([480, 300])
+            .scale(scale * zoom)
+            .translate([width / 2, height / 2])
             .clipAngle(90)
             .precision(0.35)
             .rotate(rotation);
         path = window.d3.geoPath(projection);
+    }
+
+    function scheduleRedraw() {
+        if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
+        resizeFrame = window.requestAnimationFrame(() => {
+            resizeFrame = 0;
+            if (svg && features.length) drawGlobe();
+        });
+    }
+
+    function currentPinchDistance() {
+        const points = Array.from(activePointers.values()).slice(0, 2);
+        return Math.hypot(points[0].x - points[1].x, points[0].y - points[1].y);
+    }
+
+    function clampZoom(value) {
+        const maximum = window.matchMedia("(max-width: 760px)").matches ? 1.12 : 1.18;
+        return Math.max(.8, Math.min(maximum, value));
     }
 
     function drawGlobe() {
@@ -145,6 +173,15 @@
             if (countryPath && !drag) showTooltip(countryPath, event);
         });
         svg.addEventListener("pointermove", event => {
+            if (pinch && activePointers.has(event.pointerId)) {
+                activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+                const distance = currentPinchDistance();
+                if (distance && pinch.distance) {
+                    zoom = clampZoom(pinch.zoom * distance / pinch.distance);
+                    drawGlobe();
+                }
+                return;
+            }
             const countryPath = event.target.closest(".globe-country");
             if (drag && drag.pointerId === event.pointerId) {
                 const deltaX = event.clientX - drag.x;
@@ -162,6 +199,16 @@
         });
         svg.addEventListener("pointerdown", event => {
             if (event.button !== 0) return;
+            activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+            svg.setPointerCapture(event.pointerId);
+            if (activePointers.size >= 2) {
+                drag = null;
+                const distance = currentPinchDistance();
+                pinch = distance ? { distance, zoom } : null;
+                suppressClick = true;
+                hideTooltip();
+                return;
+            }
             const countryPath = event.target.closest(".globe-country");
             drag = {
                 pointerId: event.pointerId,
@@ -172,9 +219,16 @@
                 countryCode: countryPath ? countryPath.dataset.code : "",
                 countryName: countryPath ? countryPath.dataset.name : ""
             };
-            svg.setPointerCapture(event.pointerId);
         });
         svg.addEventListener("pointerup", event => {
+            activePointers.delete(event.pointerId);
+            if (pinch) {
+                pinch = null;
+                drag = null;
+                suppressClick = true;
+                window.setTimeout(() => { suppressClick = false; }, 0);
+                return;
+            }
             if (!drag || drag.pointerId !== event.pointerId) return;
             const selection = drag;
             drag = null;
@@ -184,7 +238,16 @@
             }
             window.setTimeout(() => { suppressClick = false; }, 0);
         });
-        svg.addEventListener("pointercancel", () => { drag = null; });
+        svg.addEventListener("pointercancel", event => {
+            activePointers.delete(event.pointerId);
+            drag = null;
+            pinch = null;
+        });
+        svg.addEventListener("wheel", event => {
+            event.preventDefault();
+            zoom = clampZoom(zoom * Math.exp(-event.deltaY * .001));
+            drawGlobe();
+        }, { passive: false });
         svg.addEventListener("pointerout", event => {
             if (!event.relatedTarget || !svg.contains(event.relatedTarget)) hideTooltip();
         });
@@ -227,6 +290,10 @@
             </defs><g class="globe-layer"></g>`;
             drawGlobe();
             bindInteraction();
+            window.addEventListener("resize", scheduleRedraw);
+            if ("ResizeObserver" in window) {
+                new ResizeObserver(scheduleRedraw).observe(wrap);
+            }
             options.onStatus(`Globe ready · ${features.length} country boundaries`);
             return true;
         } catch (error) {

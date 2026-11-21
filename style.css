@@ -1405,8 +1405,8 @@ tbody tr:hover { background: rgba(69, 217, 237, .045); }
     .data-status { max-width: 118px; overflow: hidden; text-overflow: ellipsis; }
 }
 
-.globe-wrap { position: relative; width: min(100%, 760px); margin: 0 auto; touch-action: none; }
-.country-globe { display: block; width: 100%; max-height: 510px; overflow: visible; }
+.globe-wrap { position: relative; width: min(100%, 760px); min-width: 0; margin: 0 auto; touch-action: pan-y; }
+.country-globe { display: block; width: 100%; max-width: 100%; max-height: 510px; overflow: hidden; }
 .globe-sphere { fill: url(#globeOceanGradient); stroke: #537b8c; stroke-width: 1.4; }
 .globe-graticule { fill: none; stroke: rgba(165, 201, 214, .18); stroke-width: .7; pointer-events: none; }
 .globe-country { fill: #426d79; stroke: #9db8c1; stroke-width: .7; cursor: pointer; transition: fill .12s ease, stroke .12s ease; }
@@ -1450,7 +1450,8 @@ tbody tr:hover { background: rgba(69, 217, 237, .045); }
 :root[data-theme="light"] .globe-ocean-stop-3 { stop-color: #5d9bb4; }
 
 @media (max-width: 760px) {
-    .country-globe { max-height: 380px; }
+    .map-layout, .map-canvas { min-width: 0; }
+    .country-globe { max-height: min(74vh, 620px); }
     .globe-status { font-size: 10px; }
 }
 
