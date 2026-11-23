@@ -274,10 +274,13 @@
         const sovereign = state.countries.filter(country => country.independent);
         if (!sovereign.length) return;
         const chunkSize = 40;
+        const batches = [];
         for (let offset = 0; offset < sovereign.length; offset += chunkSize) {
-            const chunk = sovereign.slice(offset, offset + chunkSize);
+            batches.push({ offset, chunk: sovereign.slice(offset, offset + chunkSize) });
+        }
+        await Promise.all(batches.map(async ({ offset, chunk }) => {
             const query = createWikidataQuery(chunk);
-            if (!query) continue;
+            if (!query) return;
             const cacheKey = `wikidata-political-v2-${offset}-${chunkSize}`;
             const url = `${WIKIDATA_ENDPOINT}?query=${encodeURIComponent(query)}&format=json`;
             try {
@@ -300,7 +303,7 @@
                 state.issues.push({ source: "Wikidata leaders", message: error.message });
                 console.warn(`Could not load leader records for a country batch starting at ${offset}:`, error);
             }
-        }
+        }));
     }
 
     async function loadForeignMinisters(forceRefresh) {

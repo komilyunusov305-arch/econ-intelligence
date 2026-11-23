@@ -1031,38 +1031,45 @@
     }
 
     async function boot() {
-        bindNavigation();
-        bindControls();
-        const requestedView = window.location.hash.slice(1);
-        activateView($(requestedView) && $(requestedView).classList.contains("view") ? requestedView : "dashboard");
-        setStatus("Connecting to data sources…", "loading");
+        try {
+            bindNavigation();
+            bindControls();
+            const requestedView = window.location.hash.slice(1);
+            activateView($(requestedView) && $(requestedView).classList.contains("view") ? requestedView : "dashboard");
+            setStatus("Connecting to data sources…", "loading");
 
-        await data.load();
-        dataReady = true;
-        fillCountrySelects();
-        setupComparisonPicker();
-        if (window.EconIntel.Globe) {
-            window.EconIntel.Globe.mount({
-                svgId: "countryGlobe",
-                tooltipId: "globeTooltip",
-                wrapId: "globeWrap",
-                countries: data.state.countries,
-                selectedCodes: mapSelectedCountries,
-                onSelect: addComparisonCountry,
-                onStatus: message => { $("globeStatus").textContent = message; }
-            });
-        } else {
-            $("globeStatus").textContent = "Interactive globe unavailable · Use the country selector instead";
+            await data.load();
+            dataReady = true;
+            fillCountrySelects();
+            setupComparisonPicker();
+            if (window.EconIntel.Globe) {
+                window.EconIntel.Globe.mount({
+                    svgId: "countryGlobe",
+                    tooltipId: "globeTooltip",
+                    wrapId: "globeWrap",
+                    countries: data.state.countries,
+                    selectedCodes: mapSelectedCountries,
+                    onSelect: addComparisonCountry,
+                    onStatus: message => { $("globeStatus").textContent = message; }
+                });
+            } else {
+                $("globeStatus").textContent = "Interactive globe unavailable · Use the country selector instead";
+            }
+            if (window.EconIntel.GlobeExport) {
+                window.EconIntel.GlobeExport.mount({
+                    getReport: globeExportData,
+                    getVisualization: () => window.EconIntel.Globe.exportSvg()
+                });
+            }
+            renderAll();
+            mountOverviewMap();
+            updateStatus();
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            console.error("Dashboard initialization failed:", error);
+            setStatus(`Dashboard initialization failed · ${message}`, "error");
+            $("asOfDate").textContent = `${config.startYear}–${config.endYear} · INITIALIZATION ERROR`;
         }
-        if (window.EconIntel.GlobeExport) {
-            window.EconIntel.GlobeExport.mount({
-                getReport: globeExportData,
-                getVisualization: () => window.EconIntel.Globe.exportSvg()
-            });
-        }
-        renderAll();
-        mountOverviewMap();
-        updateStatus();
     }
 
     boot();
