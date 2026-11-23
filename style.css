@@ -1126,6 +1126,24 @@ td.num small { font-size: 11px; }
     :root[data-theme="light"] .sidebar { background: rgba(249, 251, 253, .97); }
 }
 
+.language-control select {
+    width: 62px;
+    min-height: 34px;
+    padding: 5px 7px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--text);
+    background: rgba(9, 17, 27, .78);
+    font: 700 10px var(--mono);
+    letter-spacing: .04em;
+    cursor: pointer;
+}
+
+:root[data-theme="light"] .language-control select {
+    background: rgba(255, 255, 255, .9);
+    color: #2e4357;
+}
+
 .year-control {
     display: inline-flex;
     align-items: center;

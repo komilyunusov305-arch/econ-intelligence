@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="uz">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -27,6 +27,7 @@
     <script defer src="js/organizations.js"></script>
     <script defer src="js/global-modules.js"></script>
     <script defer src="js/globe-export.js"></script>
+    <script defer src="js/i18n.js"></script>
     <script defer src="js/app.js"></script>
 </head>
 <body>
@@ -75,6 +76,14 @@
                     <span class="data-status" id="status" role="status" aria-live="polite"><span class="status-dot"></span> Connecting to data sources…</span>
                     <span class="topbar-date" id="asOfDate">LAST 10 YEARS</span>
                     <label class="year-control" for="yearSelect"><span>YEAR</span><select id="yearSelect" aria-label="Select data year" disabled><option>—</option></select></label>
+                    <label class="language-control" for="languageSelect">
+                        <span class="sr-only">Language</span>
+                        <select id="languageSelect" aria-label="Select language">
+                            <option value="uz">OʻZB</option>
+                            <option value="en">ENG</option>
+                            <option value="ru">РУС</option>
+                        </select>
+                    </label>
                     <button class="theme-toggle" id="themeToggle" type="button" aria-label="Switch to light theme" aria-pressed="false" title="Switch theme">
                         <span class="theme-icon" id="themeIcon" aria-hidden="true">☼</span>
                     </button>

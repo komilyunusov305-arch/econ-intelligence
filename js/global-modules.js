@@ -197,9 +197,15 @@
             (!continent || country.continent === continent)
             && (!query || `${country.name} ${country.officialName || ""}`.toLocaleLowerCase().includes(query))
         );
-        const records = known.map(country => renderLeaderCard(country, role, country[role])).join("");
+        const prioritized = (items) => [...items].sort((a, b) => {
+            const uzbekistanPriority = (country) =>
+                country.code === "UZB" || /^uzbek/i.test(country.name || "") ? 0 : 1;
+            const priorityDifference = uzbekistanPriority(a) - uzbekistanPriority(b);
+            return priorityDifference || a.name.localeCompare(b.name);
+        });
+        const records = prioritized(known).map(country => renderLeaderCard(country, role, country[role])).join("");
         const disclosure = filteredMissing.length
-            ? `<details class="unrecorded-list"><summary>No matching ${noun} record for ${filteredMissing.length} countries</summary><p>Not recorded by this Wikidata query; this does not confirm that an office is absent or vacant.</p><div>${filteredMissing.map(country =>
+            ? `<details class="unrecorded-list"><summary>No matching ${noun} record for ${filteredMissing.length} countries</summary><p>Not recorded by this Wikidata query; this does not confirm that an office is absent or vacant.</p><div>${prioritized(filteredMissing).map(country =>
                 `<span class="unrecorded-country">${countryFlag(country)}${escape(country.name)}${country.governmentCategory.includes("Monarchy") && role === "headOfState" ? " · monarch not recorded" : ""}</span>`
             ).join("")}</div></details>`
             : "";
