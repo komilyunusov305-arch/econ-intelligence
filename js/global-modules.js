@@ -126,7 +126,20 @@
         const checked = data.state.verifiedAt ? new Date(data.state.verifiedAt).toLocaleString() : "not checked";
         const issues = data.state.issues.length ? ` · ${data.state.issues.length} source issue${data.state.issues.length === 1 ? "" : "s"}` : "";
         element.innerHTML = `<i></i> Checked ${escape(checked)} · ${escape(sourceLabel)}${escape(issues)}`;
-        element.title = "Data retrieval/check timestamp; this does not certify every record against an official government publication.";
+        const sourceDetails = Object.entries(data.state.sources).map(([key, source]) => {
+            const name = source.source || key;
+            const updated = source.lastUpdated
+                ? ` · dataset updated ${source.lastUpdated}`
+                : source.savedAt ? ` · retrieved ${new Date(source.savedAt).toLocaleString()}` : "";
+            const error = source.error ? ` · ${source.error}` : "";
+            return `${name}: ${source.status || "checked"}${updated}${error}`;
+        });
+        const issueDetails = data.state.issues.map(issue => `${issue.source}: ${issue.message}`);
+        element.title = [
+            "Data retrieval/check timestamp; this does not certify every record against an official government publication.",
+            ...sourceDetails,
+            ...issueDetails
+        ].join("\n");
     }
 
     function populateContinents(id, records) {

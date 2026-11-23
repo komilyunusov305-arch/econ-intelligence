@@ -31,6 +31,26 @@
         ministersLoading: false,
         ministersIssue: null
     };
+    const requestQueue = [];
+    const MAX_ACTIVE_REQUESTS = 4;
+    let activeRequests = 0;
+
+    function acquireRequestSlot() {
+        if (activeRequests < MAX_ACTIVE_REQUESTS) {
+            activeRequests += 1;
+            return Promise.resolve();
+        }
+        return new Promise(resolve => requestQueue.push(resolve));
+    }
+
+    function releaseRequestSlot() {
+        activeRequests -= 1;
+        const next = requestQueue.shift();
+        if (next) {
+            activeRequests += 1;
+            next();
+        }
+    }
 
     function readCache(key) {
         try {
@@ -61,26 +81,50 @@
     }
 
     async function requestJson(url, options) {
-        const controller = typeof AbortController === "function" ? new AbortController() : null;
-        let timeout;
-        try {
-            const fetchRequest = (async () => {
-                const requestOptions = { ...options };
-                if (controller) requestOptions.signal = controller.signal;
-                const response = await fetch(url, requestOptions);
-                if (!response.ok) throw new Error(`Request failed (${response.status})`);
-                return response.json();
-            })();
-            const timeoutRequest = new Promise((resolve, reject) => {
-                timeout = window.setTimeout(() => {
-                    if (controller) controller.abort();
-                    reject(new Error("Request timed out after 15000 ms."));
-                }, 15000);
-            });
-            return await Promise.race([fetchRequest, timeoutRequest]);
-        } finally {
-            if (timeout) window.clearTimeout(timeout);
+        let lastError;
+        for (let attempt = 0; attempt < 2; attempt++) {
+            await acquireRequestSlot();
+            try {
+                const controller = typeof AbortController === "function" ? new AbortController() : null;
+                let timeout;
+                try {
+                    const fetchRequest = (async () => {
+                        const requestOptions = { ...options };
+                        if (controller) requestOptions.signal = controller.signal;
+                        const response = await fetch(url, requestOptions);
+                        if (!response.ok) {
+                            const error = new Error(`Request failed (${response.status})`);
+                            error.status = response.status;
+                            error.retryAfter = response.headers.get("Retry-After");
+                            throw error;
+                        }
+                        return response.json();
+                    })();
+                    const timeoutRequest = new Promise((resolve, reject) => {
+                        timeout = window.setTimeout(() => {
+                            if (controller) controller.abort();
+                            reject(new Error("Request timed out after 20000 ms."));
+                        }, 20000);
+                    });
+                    return await Promise.race([fetchRequest, timeoutRequest]);
+                } finally {
+                    if (timeout) window.clearTimeout(timeout);
+                }
+            } catch (error) {
+                lastError = error;
+                const status = error.status;
+                const retryable = !status || status === 429 || status >= 500;
+                if (!retryable || attempt === 1) throw error;
+            } finally {
+                releaseRequestSlot();
+            }
+            const retryAfter = Number(lastError.retryAfter);
+            const delay = Number.isFinite(retryAfter) && retryAfter > 0
+                ? Math.min(retryAfter * 1000, 5000)
+                : 750;
+            await new Promise(resolve => window.setTimeout(resolve, delay));
         }
+        throw lastError;
     }
 
     async function cachedJson(key, url, options) {
@@ -190,15 +234,25 @@
         const start = key === "population" || key === "growth" || key === "male" || key === "female" ? HISTORY_START : 2000;
         const url = `${WORLD_BANK_BASE}${code}?format=json&date=${start}:${new Date().getFullYear()}&per_page=20000`;
         const response = await cachedJson(`wb-${code}`, url, { force: forceRefresh });
-        const records = Array.isArray(response) && Array.isArray(response[1]) ? response[1] : [];
-        if (Array.isArray(response) && response[1] !== null && !Array.isArray(response[1])) {
+        if (!Array.isArray(response) || !response[0] || typeof response[0] !== "object") {
             invalidateCache(`wb-${code}`);
             throw new Error(`World Bank indicator ${code} had an unexpected format.`);
         }
-        if (!Array.isArray(response)) {
+        const rawMessages = response[0].message;
+        const messages = Array.isArray(rawMessages) ? rawMessages : rawMessages ? [rawMessages] : [];
+        if (messages.length) {
             invalidateCache(`wb-${code}`);
-            throw new Error(`World Bank indicator ${code} had an unexpected format.`);
+            const details = messages.map(message => typeof message === "string"
+                ? message
+                : message.value || message.key || "Unknown API error").join("; ");
+            throw new Error(`World Bank indicator ${code}: ${details}`);
         }
+        if (response[1] !== null && !Array.isArray(response[1])
+            || response[1] === null && Number(response[0].total) > 0) {
+            invalidateCache(`wb-${code}`);
+            throw new Error(`World Bank indicator ${code} had an unexpected data payload.`);
+        }
+        const records = response[1] || [];
         const byCountry = Object.create(null);
         records.forEach(record => {
             const countryCode = cleanText(record.countryiso3code);
@@ -209,6 +263,12 @@
         });
         Object.values(byCountry).forEach(points => points.sort((a, b) => a.year - b.year));
         state.series[key] = byCountry;
+        state.sources[`wb-${code}`] = {
+            ...state.sources[`wb-${code}`],
+            source: "World Bank Open Data",
+            lastUpdated: response[0].lastupdated || null,
+            observations: records.filter(record => record.value !== null).length
+        };
     }
 
     function latest(points) {
@@ -319,11 +379,13 @@
 
     async function loadForeignMinisters(forceRefresh) {
         const sovereign = state.countries.filter(country => country.independent);
-        if (!sovereign.length) return;
-        const records = [];
+        if (!sovereign.length) return [];
         const chunkSize = 40;
+        const batches = [];
         for (let offset = 0; offset < sovereign.length; offset += chunkSize) {
-            const chunk = sovereign.slice(offset, offset + chunkSize);
+            batches.push({ offset, chunk: sovereign.slice(offset, offset + chunkSize) });
+        }
+        const results = await Promise.allSettled(batches.map(async ({ offset, chunk }) => {
             const codes = chunk.map(country => `"${country.code}"`).join(" ");
             const ministerQuery = `SELECT DISTINCT ?iso3 ?foreignMinister ?foreignMinisterLabel ?foreignMinisterImage ?foreignMinisterStart ?foreignMinisterPartyLabel WHERE {
                 VALUES ?iso3 { ${codes} }
@@ -344,11 +406,26 @@
             const response = await cachedJson(cacheKey, url, { headers: { Accept: "application/sparql-results+json" }, force: forceRefresh });
             const rows = response && response.results && response.results.bindings;
             if (!Array.isArray(rows)) throw new Error("Wikidata returned an unexpected foreign-minister response.");
-            rows.forEach(binding => {
+            return rows.map(binding => {
                 const country = state.byCode[wdValue(binding, "iso3")];
                 const person = wdEntity(binding, "foreignMinister", "foreignMinisterLabel", "foreignMinisterImage", "foreignMinisterStart", "foreignMinisterPartyLabel");
-                if (country && person) records.push({ code: country.code, person });
-            });
+                return country && person ? { code: country.code, person } : null;
+            }).filter(Boolean);
+        }));
+        const records = [];
+        const errors = [];
+        results.forEach((result, index) => {
+            if (result.status === "fulfilled") {
+                records.push(...result.value);
+                return;
+            }
+            const message = result.reason instanceof Error ? result.reason.message : String(result.reason);
+            errors.push(message);
+            state.issues.push({ source: `Wikidata foreign ministers batch ${index + 1}`, message });
+            console.warn(`Could not load foreign-minister records for batch ${index + 1}:`, result.reason);
+        });
+        if (errors.length) {
+            state.ministersIssue = `${errors.length} of ${batches.length} Wikidata batches unavailable.`;
         }
         return records;
     }
