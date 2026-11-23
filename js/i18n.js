@@ -131,8 +131,8 @@
         en: {}
     };
 
-    let language = localStorage.getItem("econ-intelligence-language") || "uz";
-    if (!dictionaries[language]) language = "uz";
+    let language = localStorage.getItem("econ-intelligence-language") || "en";
+    if (!dictionaries[language]) language = "en";
 
     function translateText(text) {
         if (language === "en") return text;
@@ -140,14 +140,20 @@
     }
 
     function translateElement(element) {
-        if (!element || element.closest && element.closest(".chart-canvas, canvas, svg")) return;
+        if (!element) return;
+        if (element.nodeType === Node.TEXT_NODE) {
+            const original = element.textContent;
+            const trimmed = original.trim();
+            if (!trimmed) return;
+            const translated = translateText(trimmed);
+            if (translated !== trimmed) element.textContent = original.replace(trimmed, translated);
+            return;
+        }
+        if (element.nodeType !== Node.ELEMENT_NODE
+            || element.closest(".chart-canvas, canvas, svg")) return;
         if (element.childNodes && element.childNodes.length) {
             element.childNodes.forEach(node => {
-                if (node.nodeType === Node.TEXT_NODE) {
-                    const original = node.textContent;
-                    const trimmed = original.trim();
-                    if (trimmed) node.textContent = original.replace(trimmed, translateText(trimmed));
-                } else if (node.nodeType === Node.ELEMENT_NODE) {
+                if (node.nodeType === Node.TEXT_NODE || node.nodeType === Node.ELEMENT_NODE) {
                     translateElement(node);
                 }
             });
@@ -155,14 +161,18 @@
     }
 
     function translatePlaceholders(root) {
-        root.querySelectorAll("[placeholder]").forEach(element => {
-            element.placeholder = translateText(element.placeholder);
-        });
-        root.querySelectorAll("[aria-label]").forEach(element => {
-            element.setAttribute("aria-label", translateText(element.getAttribute("aria-label")));
-        });
-        root.querySelectorAll("[title]").forEach(element => {
-            element.setAttribute("title", translateText(element.getAttribute("title")));
+        const selectors = "[placeholder], [aria-label], [title]";
+        const elements = root.nodeType === Node.ELEMENT_NODE
+            ? [root, ...root.querySelectorAll(selectors)]
+            : Array.from(root.querySelectorAll(selectors));
+        elements.forEach(element => {
+            if (element.closest(".chart-canvas, canvas, svg")) return;
+            ["placeholder", "aria-label", "title"].forEach(attribute => {
+                if (!element.hasAttribute(attribute)) return;
+                const original = element.getAttribute(attribute);
+                const translated = translateText(original);
+                if (translated !== original) element.setAttribute(attribute, translated);
+            });
         });
     }
 
@@ -172,6 +182,29 @@
         translatePlaceholders(document);
         const select = document.getElementById("languageSelect");
         if (select) select.value = language;
+    }
+
+    function translateMutations(mutations) {
+        mutations.forEach(mutation => {
+            if (mutation.type === "attributes") {
+                const original = mutation.target.getAttribute(mutation.attributeName);
+                const translated = translateText(original);
+                if (translated !== original) mutation.target.setAttribute(mutation.attributeName, translated);
+                return;
+            }
+            if (mutation.type === "characterData") {
+                translateElement(mutation.target);
+                return;
+            }
+            mutation.addedNodes.forEach(node => {
+                if (node.nodeType === Node.ELEMENT_NODE) {
+                    translateElement(node);
+                    translatePlaceholders(node);
+                } else if (node.nodeType === Node.TEXT_NODE) {
+                    translateElement(node);
+                }
+            });
+        });
     }
 
     function setLanguage(nextLanguage) {
@@ -188,7 +221,13 @@
         apply();
         const select = document.getElementById("languageSelect");
         if (select) select.addEventListener("change", () => setLanguage(select.value));
-        const observer = new MutationObserver(() => apply());
-        observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+        const observer = new MutationObserver(translateMutations);
+        observer.observe(document.body, {
+            subtree: true,
+            childList: true,
+            characterData: true,
+            attributes: true,
+            attributeFilter: ["placeholder", "aria-label", "title"]
+        });
     });
 })();

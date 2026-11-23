@@ -7,6 +7,9 @@
     let selectedCode = "";
     let markers = Object.create(null);
     let countryDirectory = Object.create(null);
+    let markerLayer;
+    let mapStatus;
+    let tilesUnavailable = false;
     let needsInitialLayout = false;
 
     function markerIcon(code) {
@@ -32,19 +35,52 @@
         Object.entries(markers).forEach(([code, marker]) => marker.setIcon(markerIcon(code)));
     }
 
+    function setCountries(countries, sourceUnavailable) {
+        countryDirectory = countries || Object.create(null);
+        if (!map || !markerLayer) return;
+
+        markerLayer.clearLayers();
+        markers = Object.create(null);
+        let mappedCount = 0;
+        Object.values(countryDirectory).forEach(country => {
+            if (!country || !Number.isFinite(country.latitude) || !Number.isFinite(country.longitude)
+                || country.latitude < -90 || country.latitude > 90
+                || country.longitude < -180 || country.longitude > 180) return;
+            const marker = window.L.marker([country.latitude, country.longitude], {
+                icon: markerIcon(country.code),
+                keyboard: true,
+                title: `${country.name} · Select country`
+            });
+            const tooltipContent = document.createElement("span");
+            tooltipContent.textContent = `${country.name} · ${country.code}`;
+            marker.bindTooltip(tooltipContent, { direction: "top", offset: [0, -9] });
+            marker.on("click", () => onSelect(country.code, country.name));
+            markers[country.code] = marker;
+            markerLayer.addLayer(marker);
+            mappedCount += 1;
+        });
+
+        if (mapStatus) {
+            mapStatus.textContent = tilesUnavailable
+                ? "Map tiles unavailable · Country locations remain usable."
+                : mappedCount
+                    ? `${mappedCount} World Bank country locations ready · Zoom in or select a cluster to explore.`
+                    : sourceUnavailable
+                        ? "Source unavailable · Country locations could not be loaded; the world map remains available."
+                        : Object.keys(countryDirectory).length
+                            ? "Country coordinates unavailable · The world map remains available."
+                            : "Loading country locations · The world map is available.";
+        }
+    }
+
     function mount(options) {
         const container = document.getElementById(options.mapId);
-        const status = document.getElementById(options.statusId);
+        mapStatus = document.getElementById(options.statusId);
         if (!window.L || !container) {
-            if (status) status.textContent = "Interactive map unavailable · Check that Leaflet loaded.";
-            return false;
-        }
-        if (!window.L.markerClusterGroup) {
-            if (status) status.textContent = "Country map unavailable · The marker clustering library did not load.";
+            if (mapStatus) mapStatus.textContent = "Interactive map unavailable · The map library did not load.";
             return false;
         }
 
-        countryDirectory = options.countries;
         selectedCode = options.initialCode || "";
         onSelect = options.onSelect;
         const bounds = container.getBoundingClientRect();
@@ -64,35 +100,26 @@
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
             maxZoom: 19
         });
+        const tileTimeout = window.setTimeout(() => {
+            tilesUnavailable = true;
+            if (mapStatus) mapStatus.textContent = "Map tiles unavailable or delayed · Country locations remain usable.";
+        }, 15000);
+        tiles.once("load", () => window.clearTimeout(tileTimeout));
         tiles.on("tileerror", () => {
-            if (status) status.textContent = "Some map tiles could not be loaded · World Bank country locations remain usable.";
+            tilesUnavailable = true;
+            window.clearTimeout(tileTimeout);
+            if (mapStatus) mapStatus.textContent = "Map tiles unavailable · Country locations remain usable.";
         });
         tiles.addTo(map);
 
-        const markerLayer = window.L.markerClusterGroup({
-            maxClusterRadius: 48,
-            showCoverageOnHover: false,
-            spiderfyOnMaxZoom: true,
-            zoomToBoundsOnClick: true
-        });
-        let mappedCount = 0;
-        Object.values(countryDirectory).forEach(country => {
-            if (!country || !Number.isFinite(country.latitude) || !Number.isFinite(country.longitude)
-                || country.latitude < -90 || country.latitude > 90
-                || country.longitude < -180 || country.longitude > 180) return;
-            const marker = window.L.marker([country.latitude, country.longitude], {
-                icon: markerIcon(country.code),
-                keyboard: true,
-                title: `${country.name} · Select country`
-            });
-            const tooltipContent = document.createElement("span");
-            tooltipContent.textContent = `${country.name} · ${country.code}`;
-            marker.bindTooltip(tooltipContent, { direction: "top", offset: [0, -9] });
-            marker.on("click", () => onSelect(country.code, country.name));
-            markers[country.code] = marker;
-            markerLayer.addLayer(marker);
-            mappedCount += 1;
-        });
+        markerLayer = window.L.markerClusterGroup
+            ? window.L.markerClusterGroup({
+                maxClusterRadius: 48,
+                showCoverageOnHover: false,
+                spiderfyOnMaxZoom: true,
+                zoomToBoundsOnClick: true
+            })
+            : window.L.layerGroup();
         markerLayer.addTo(map);
 
         const controls = [
@@ -106,8 +133,13 @@
         });
         map.whenReady(() => {
             invalidateSize();
-            if (status) status.textContent = `${mappedCount} World Bank country locations ready · Zoom in or select a cluster to explore.`;
         });
+        if (typeof ResizeObserver === "function") {
+            new ResizeObserver(invalidateSize).observe(container);
+        }
+        window.addEventListener("resize", invalidateSize);
+        window.addEventListener("orientationchange", invalidateSize);
+        setCountries(options.countries);
         return true;
     }
 
@@ -132,5 +164,5 @@
         map.setView(defaultView.center, overviewZoom(), { animate: false });
     }
 
-    window.EconIntel.IntelligenceMap = { mount, setSelectedCountry, invalidateSize, reset };
+    window.EconIntel.IntelligenceMap = { mount, setCountries, setSelectedCountry, invalidateSize, reset };
 }());

@@ -18,14 +18,24 @@
         if (pending) return pending;
 
         const request = (async () => {
-            const controller = new AbortController();
-            const timeout = window.setTimeout(() => controller.abort(), 20000);
+            const controller = typeof AbortController === "function" ? new AbortController() : null;
+            let timeout;
             try {
-                const response = await fetch(url, { signal: controller.signal });
-                if (!response.ok) throw new Error(`Request failed (${response.status})`);
-                return await response.json();
+                const fetchRequest = (async () => {
+                    const options = controller ? { signal: controller.signal } : {};
+                    const response = await fetch(url, options);
+                    if (!response.ok) throw new Error(`Request failed (${response.status})`);
+                    return response.json();
+                })();
+                const timeoutRequest = new Promise((resolve, reject) => {
+                    timeout = window.setTimeout(() => {
+                        if (controller) controller.abort();
+                        reject(new Error("Request timed out after 15000 ms."));
+                    }, 15000);
+                });
+                return await Promise.race([fetchRequest, timeoutRequest]);
             } finally {
-                window.clearTimeout(timeout);
+                if (timeout) window.clearTimeout(timeout);
             }
         })();
         inFlightRequests.set(url, request);
@@ -139,7 +149,7 @@
         state.series[key] = countries;
     }
 
-    async function load() {
+    async function load(onCountriesReady) {
         state.issues = [];
         state.loaded = false;
         state.lastUpdated = null;
@@ -149,8 +159,11 @@
             state.issues.push({ source: "Country directory", message: error.message });
             state.loaded = true;
             state.lastUpdated = new Date().toISOString();
+            if (onCountriesReady) onCountriesReady();
             return state;
         }
+
+        if (onCountriesReady) onCountriesReady();
 
         const requests = [
             ...Object.entries(config.indicators).map(([key, indicator]) => ({

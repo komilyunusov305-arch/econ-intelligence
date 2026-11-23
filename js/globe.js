@@ -441,9 +441,25 @@
 
         try {
             if (!window.d3 || !window.d3.geoOrthographic) throw new Error("The globe projection library did not load.");
-            const response = await fetch(GEOJSON_URL);
-            if (!response.ok) throw new Error(`Country boundaries request failed (${response.status}).`);
-            const geojson = await response.json();
+            const controller = typeof AbortController === "function" ? new AbortController() : null;
+            let timeout;
+            const fetchRequest = (async () => {
+                const response = await fetch(GEOJSON_URL, controller ? { signal: controller.signal } : {});
+                if (!response.ok) throw new Error(`Country boundaries request failed (${response.status}).`);
+                return response.json();
+            })();
+            const timeoutRequest = new Promise((resolve, reject) => {
+                timeout = window.setTimeout(() => {
+                    if (controller) controller.abort();
+                    reject(new Error("Country boundaries request timed out after 15000 ms."));
+                }, 15000);
+            });
+            let geojson;
+            try {
+                geojson = await Promise.race([fetchRequest, timeoutRequest]);
+            } finally {
+                if (timeout) window.clearTimeout(timeout);
+            }
             if (!geojson || !Array.isArray(geojson.features)) throw new Error("The country boundary data has an unexpected format.");
 
             features = geojson.features;
@@ -464,7 +480,7 @@
             options.onStatus(`Globe ready · ${features.length} country boundaries`);
             return true;
         } catch (error) {
-            console.error("Could not load interactive globe:", error);
+            console.warn("Could not load interactive globe:", error);
             svg.innerHTML = `<text class="globe-loading" x="480" y="460" text-anchor="middle">Globe map unavailable</text>
                 <text class="globe-loading-hint" x="480" y="492" text-anchor="middle">Use the country selector to choose a country.</text>`;
             options.onStatus("Globe unavailable · Use the country selector instead");

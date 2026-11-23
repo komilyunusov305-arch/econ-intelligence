@@ -266,11 +266,27 @@
         };
         const title = titleAliases[item.acronym] || item.name;
         try {
-            const response = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, {
-                headers: { Accept: "application/json" }
+            const controller = typeof AbortController === "function" ? new AbortController() : null;
+            let timeout;
+            const fetchRequest = (async () => {
+                const options = { headers: { Accept: "application/json" } };
+                if (controller) options.signal = controller.signal;
+                const response = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title)}`, options);
+                if (!response.ok) throw new Error(`Symbol lookup failed (${response.status})`);
+                return response.json();
+            })();
+            const timeoutRequest = new Promise((resolve, reject) => {
+                timeout = window.setTimeout(() => {
+                    if (controller) controller.abort();
+                    reject(new Error("Symbol lookup timed out after 15000 ms."));
+                }, 15000);
             });
-            if (!response.ok) throw new Error(`Symbol lookup failed (${response.status})`);
-            const record = await response.json();
+            let record;
+            try {
+                record = await Promise.race([fetchRequest, timeoutRequest]);
+            } finally {
+                if (timeout) window.clearTimeout(timeout);
+            }
             const image = record.originalimage && record.originalimage.source
                 ? record.originalimage.source
                 : record.thumbnail && record.thumbnail.source

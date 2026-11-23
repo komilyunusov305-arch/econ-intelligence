@@ -104,9 +104,27 @@
     async function flagPng(report) {
         if (!report.country.flagUrl) return null;
         try {
-            const response = await fetch(report.country.flagUrl, { mode: "cors" });
-            if (!response.ok) return null;
-            const blob = await response.blob();
+            const controller = typeof AbortController === "function" ? new AbortController() : null;
+            let timeout;
+            const fetchRequest = (async () => {
+                const options = { mode: "cors" };
+                if (controller) options.signal = controller.signal;
+                const response = await fetch(report.country.flagUrl, options);
+                if (!response.ok) throw new Error(`Flag request failed (${response.status}).`);
+                return response.blob();
+            })();
+            const timeoutRequest = new Promise((resolve, reject) => {
+                timeout = window.setTimeout(() => {
+                    if (controller) controller.abort();
+                    reject(new Error("Flag request timed out after 15000 ms."));
+                }, 15000);
+            });
+            let blob;
+            try {
+                blob = await Promise.race([fetchRequest, timeoutRequest]);
+            } finally {
+                if (timeout) window.clearTimeout(timeout);
+            }
             const objectUrl = URL.createObjectURL(blob);
             try {
                 const image = new Image();

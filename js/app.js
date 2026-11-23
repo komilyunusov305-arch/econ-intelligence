@@ -17,7 +17,6 @@
     let selectedMapName = "";
     const mapSelectedCountries = [];
     let comparisonPickerRender = null;
-    let dataReady = false;
     let overviewMapMounted = false;
 
     function sourceName(key) {
@@ -995,7 +994,12 @@
         const countryCount = Object.keys(data.state.countries).length;
         $("overviewUpdatedAt").textContent = data.state.lastUpdated
             ? `Sources checked ${new Date(data.state.lastUpdated).toLocaleString()}`
-            : "Source update time unavailable";
+            : data.state.loaded ? "Source update time unavailable" : "Checking source availability…";
+        if (!data.state.loaded) {
+            setStatus("Loading source observations…", "loading");
+            $("asOfDate").textContent = `SOURCE WINDOW ${config.startYear}–${config.endYear}`;
+            return;
+        }
         if (!countryCount) {
             setStatus("Data unavailable — check your connection and refresh", "error");
             $("asOfDate").textContent = `${config.startYear}–${config.endYear} · NO DATA`;
@@ -1019,7 +1023,7 @@
 
     function mountOverviewMap() {
         const dashboard = $("dashboard");
-        if (!dataReady || overviewMapMounted || !dashboard || dashboard.hidden
+        if (overviewMapMounted || !dashboard || dashboard.hidden
             || !window.EconIntel.IntelligenceMap) return;
         overviewMapMounted = window.EconIntel.IntelligenceMap.mount({
             mapId: "overviewMap",
@@ -1038,29 +1042,43 @@
             activateView($(requestedView) && $(requestedView).classList.contains("view") ? requestedView : "dashboard");
             setStatus("Connecting to data sources…", "loading");
 
-            await data.load();
-            dataReady = true;
-            fillCountrySelects();
-            setupComparisonPicker();
-            if (window.EconIntel.Globe) {
-                window.EconIntel.Globe.mount({
-                    svgId: "countryGlobe",
-                    tooltipId: "globeTooltip",
-                    wrapId: "globeWrap",
-                    countries: data.state.countries,
-                    selectedCodes: mapSelectedCountries,
-                    onSelect: addComparisonCountry,
-                    onStatus: message => { $("globeStatus").textContent = message; }
-                });
-            } else {
-                $("globeStatus").textContent = "Interactive globe unavailable · Use the country selector instead";
-            }
-            if (window.EconIntel.GlobeExport) {
-                window.EconIntel.GlobeExport.mount({
-                    getReport: globeExportData,
-                    getVisualization: () => window.EconIntel.Globe.exportSvg()
-                });
-            }
+            mountOverviewMap();
+            let countryUiInitialized = false;
+            const initializeCountryUi = () => {
+                if (countryUiInitialized) return;
+                countryUiInitialized = true;
+                fillCountrySelects();
+                setupComparisonPicker();
+                if (window.EconIntel.Globe) {
+                    window.EconIntel.Globe.mount({
+                        svgId: "countryGlobe",
+                        tooltipId: "globeTooltip",
+                        wrapId: "globeWrap",
+                        countries: data.state.countries,
+                        selectedCodes: mapSelectedCountries,
+                        onSelect: addComparisonCountry,
+                        onStatus: message => { $("globeStatus").textContent = message; }
+                    });
+                } else {
+                    $("globeStatus").textContent = "Interactive globe unavailable · Use the country selector instead";
+                }
+                if (window.EconIntel.GlobeExport) {
+                    window.EconIntel.GlobeExport.mount({
+                        getReport: globeExportData,
+                        getVisualization: () => window.EconIntel.Globe.exportSvg()
+                    });
+                }
+                if (window.EconIntel.IntelligenceMap) {
+                    window.EconIntel.IntelligenceMap.setCountries(
+                        data.state.countries,
+                        data.state.loaded && Object.keys(data.state.countries).length === 0
+                    );
+                }
+                renderAll();
+                updateStatus();
+            };
+
+            await data.load(initializeCountryUi);
             renderAll();
             mountOverviewMap();
             updateStatus();

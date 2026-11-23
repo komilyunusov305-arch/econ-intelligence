@@ -61,14 +61,25 @@
     }
 
     async function requestJson(url, options) {
-        const controller = new AbortController();
-        const timeout = window.setTimeout(() => controller.abort(), 60000);
+        const controller = typeof AbortController === "function" ? new AbortController() : null;
+        let timeout;
         try {
-            const response = await fetch(url, { ...options, signal: controller.signal });
-            if (!response.ok) throw new Error(`Request failed (${response.status})`);
-            return await response.json();
+            const fetchRequest = (async () => {
+                const requestOptions = { ...options };
+                if (controller) requestOptions.signal = controller.signal;
+                const response = await fetch(url, requestOptions);
+                if (!response.ok) throw new Error(`Request failed (${response.status})`);
+                return response.json();
+            })();
+            const timeoutRequest = new Promise((resolve, reject) => {
+                timeout = window.setTimeout(() => {
+                    if (controller) controller.abort();
+                    reject(new Error("Request timed out after 15000 ms."));
+                }, 15000);
+            });
+            return await Promise.race([fetchRequest, timeoutRequest]);
         } finally {
-            window.clearTimeout(timeout);
+            if (timeout) window.clearTimeout(timeout);
         }
     }
 
