@@ -14,6 +14,8 @@
     <script defer src="https://cdn.jsdelivr.net/npm/d3-geo@3.1.1/dist/d3-geo.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.9.0/mammoth.browser.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
     <script defer src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -28,6 +30,7 @@
     <script defer src="js/global-modules.js"></script>
     <script defer src="js/globe-export.js"></script>
     <script defer src="js/i18n.js"></script>
+    <script defer src="js/presentation-studio.js"></script>
     <script defer src="js/app.js"></script>
 </head>
 <body>
@@ -56,6 +59,7 @@
                 <a class="nav-item" href="#government-systems" data-view="government-systems"><span class="nav-icon" aria-hidden="true">⌂</span>Government Systems</a>
                 <a class="nav-item" href="#organizations" data-view="organizations"><span class="nav-icon" aria-hidden="true">◎</span>Global Organizations</a>
                 <a class="nav-item" href="#analyst" data-view="analyst"><span class="nav-icon" aria-hidden="true">✳</span>AI Economic Analyst</a>
+                <a class="nav-item" href="#presentation-studio" data-view="presentation-studio"><span class="nav-icon" aria-hidden="true">▧</span>AI Presentation Studio</a>
             </nav>
             <div class="sidebar-bottom">
                 <div class="live-indicator"><span></span> SOURCE DATA WORKSPACE</div>
@@ -419,6 +423,116 @@
                             <div class="analyst-actions"><button class="button button-primary" type="submit">Ask analyst <span aria-hidden="true">→</span></button><button class="button button-secondary" type="reset" id="clearPrompt">Clear</button></div>
                         </form>
                         <div id="analystResponse" class="analyst-response" role="status" aria-live="polite"><strong>Checking configuration</strong><span>Prompts are not sent until the server-side AI configuration is available.</span></div>
+                    </section>
+                </section>
+
+                <section class="view" id="presentation-studio" aria-labelledby="presentationTitle" hidden>
+                    <div class="page-heading">
+                        <div>
+                            <p class="eyebrow">RESEARCH-LED PRESENTATION BUILDER <span class="eyebrow-line"></span></p>
+                            <h1 id="presentationTitle">AI Presentation Studio</h1>
+                            <p class="page-intro">Turn academic requirements into a researched, source-cited PowerPoint presentation.</p>
+                        </div>
+                        <span class="availability-pill" id="presentationProviderStatus"><i></i> Checking AI research service…</span>
+                    </div>
+                    <div class="presentation-layout">
+                        <section class="panel presentation-input-panel" aria-labelledby="presentationInputTitle">
+                            <div class="panel-heading">
+                                <div><p class="eyebrow">01 · ASSIGNMENT</p><h2 id="presentationInputTitle">Add your requirements</h2></div>
+                                <span class="panel-badge">PDF · DOCX · TEXT</span>
+                            </div>
+                            <p class="panel-description">Paste the complete assignment or upload its file. The text is sent securely to the site's server-side AI function for analysis and research.</p>
+                            <form id="presentationForm">
+                                <label class="studio-field" for="presentationAssignment">Assignment requirements</label>
+                                <textarea id="presentationAssignment" maxlength="16000" rows="9" placeholder="Paste the assignment brief, including required topics, criteria, sources, slide count and formatting…"></textarea>
+                                <div class="studio-upload-row">
+                                    <label class="button button-secondary studio-file-button" for="presentationFile"><span aria-hidden="true">↑</span> Upload PDF or DOCX</label>
+                                    <input id="presentationFile" type="file" accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document">
+                                    <span id="presentationFileName" class="studio-file-name">No file selected · 20 MB maximum</span>
+                                </div>
+                                <p id="presentationFileStatus" class="source-note" role="status" aria-live="polite"></p>
+                                <div class="studio-controls">
+                                    <label class="studio-field" for="presentationCountryMode">Country selection
+                                        <select id="presentationCountryMode" class="select-control">
+                                            <option value="auto">Choose the best-fit country automatically</option>
+                                            <option value="manual">I will choose a country</option>
+                                        </select>
+                                    </label>
+                                    <label class="studio-field" for="presentationCountry">Manual country
+                                        <select id="presentationCountry" class="select-control" disabled>
+                                            <option value="">Loading country directory…</option>
+                                        </select>
+                                    </label>
+                                    <label class="studio-field" for="presentationLanguage">Presentation language
+                                        <select id="presentationLanguage" class="select-control">
+                                            <option value="auto">Use the assignment language</option>
+                                            <option value="uz">Uzbek</option>
+                                            <option value="en">English</option>
+                                            <option value="ru">Russian</option>
+                                        </select>
+                                    </label>
+                                    <label class="studio-field" for="presentationSlideCount">Slide count
+                                        <select id="presentationSlideCount" class="select-control">
+                                            <option value="auto">Infer from assignment</option>
+                                            <option value="5">5 slides</option>
+                                            <option value="6">6 slides</option>
+                                            <option value="8">8 slides</option>
+                                            <option value="10">10 slides</option>
+                                            <option value="12">12 slides</option>
+                                            <option value="14">14 slides</option>
+                                            <option value="16">16 slides</option>
+                                            <option value="18">18 slides</option>
+                                            <option value="20">20 slides</option>
+                                            <option value="24">24 slides</option>
+                                        </select>
+                                    </label>
+                                </div>
+                                <p id="presentationCountryStatus" class="source-note" role="status" aria-live="polite"></p>
+                                <p class="studio-source-note">Statistics and factual claims are only included when matched to sources found through web research. API keys stay server-side.</p>
+                                <div class="studio-actions">
+                                    <button class="button button-primary" id="analyzeAssignment" type="submit">Analyze assignment <span aria-hidden="true">→</span></button>
+                                </div>
+                            </form>
+                        </section>
+                        <aside class="panel presentation-progress-panel" aria-labelledby="presentationProgressTitle">
+                            <p class="eyebrow">WORKFLOW</p>
+                            <h2 id="presentationProgressTitle">From brief to slides</h2>
+                            <ol class="studio-steps" id="presentationSteps">
+                                <li class="is-current" data-step="analyze"><span>01</span><div><strong>Analyze requirements</strong><small>Sections, language and formatting</small></div></li>
+                                <li data-step="research"><span>02</span><div><strong>Research & select country</strong><small>Web search with source citations</small></div></li>
+                                <li data-step="generate"><span>03</span><div><strong>Build your presentation</strong><small>Review slides and export PowerPoint</small></div></li>
+                            </ol>
+                            <div class="studio-progress-track" aria-hidden="true"><span id="presentationProgressBar"></span></div>
+                            <p id="presentationStatus" class="studio-status" role="status" aria-live="polite">Ready when you are. Add an assignment to get started.</p>
+                        </aside>
+                    </div>
+                    <section class="panel presentation-plan-panel spaced-panel" id="presentationPlan" hidden aria-labelledby="presentationPlanTitle">
+                        <div class="panel-heading"><div><p class="eyebrow">02 · REVIEW THE PLAN</p><h2 id="presentationPlanTitle">Assignment analysis</h2></div><span class="panel-badge" id="presentationPlanCount"></span></div>
+                        <div class="presentation-plan-summary">
+                            <div class="presentation-country-card"><span class="studio-micro-label">SELECTED COUNTRY</span><h3 id="presentationSelectedCountry">—</h3><p id="presentationCountryReason"></p><div id="presentationPlanSources" class="studio-source-list"></div></div>
+                            <div class="presentation-requirements">
+                                <div><span class="studio-micro-label">LANGUAGE</span><strong id="presentationPlanLanguage">—</strong></div>
+                                <div><span class="studio-micro-label">SLIDES</span><strong id="presentationPlanSlides">—</strong></div>
+                                <div><span class="studio-micro-label">REQUIRED SECTIONS</span><ul id="presentationPlanSections"></ul></div>
+                                <div><span class="studio-micro-label">FORMATTING</span><ul id="presentationPlanFormatting"></ul></div>
+                            </div>
+                        </div>
+                        <div class="presentation-outline-heading"><div><p class="eyebrow">PROPOSED OUTLINE</p><h3 id="presentationPlanTitleText">Presentation outline</h3></div><button class="button button-secondary" id="reanalyzeAssignment" type="button">Regenerate analysis ↻</button></div>
+                        <ol id="presentationOutline" class="presentation-outline"></ol>
+                        <div class="studio-actions">
+                            <button class="button button-primary" id="generatePresentation" type="button">Research & generate slides <span aria-hidden="true">→</span></button>
+                        </div>
+                    </section>
+                    <section class="panel presentation-result-panel spaced-panel" id="presentationResult" hidden aria-labelledby="presentationResultTitle">
+                        <div class="panel-heading"><div><p class="eyebrow">03 · REVIEW & EXPORT</p><h2 id="presentationResultTitle">Presentation draft</h2></div><span class="panel-badge" id="presentationResultCount"></span></div>
+                        <div class="presentation-result-heading"><div><h3 id="presentationGeneratedTitle"></h3><p id="presentationGeneratedSubtitle"></p></div><span id="presentationGeneratedCountry" class="country-code"></span></div>
+                        <div id="presentationSlidesPreview" class="presentation-slide-preview"></div>
+                        <div class="presentation-reference-preview"><h3>Verified research sources</h3><ol id="presentationReferences"></ol></div>
+                        <div id="presentationDownloadStatus" class="studio-status" role="status" aria-live="polite"></div>
+                        <div class="studio-actions">
+                            <button class="button button-primary" id="downloadPresentation" type="button"><span aria-hidden="true">↓</span> Download PowerPoint (.pptx)</button>
+                            <button class="button button-secondary" id="regeneratePresentation" type="button">Regenerate content ↻</button>
+                        </div>
                     </section>
                 </section>
 
