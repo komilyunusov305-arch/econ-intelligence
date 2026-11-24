@@ -2264,3 +2264,222 @@ h1 { letter-spacing: -.05em; }
 @media (prefers-reduced-motion: reduce) {
     .ticker-track { animation: none; }
 }
+
+/* High-density intelligence-terminal presentation */
+body::before {
+    position: fixed;
+    z-index: -1;
+    inset: 0;
+    pointer-events: none;
+    content: "";
+    background:
+        linear-gradient(rgba(107, 169, 201, .018) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(107, 169, 201, .018) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,.72), transparent 82%);
+}
+
+.sidebar {
+    background:
+        linear-gradient(180deg, rgba(11, 24, 36, .99), rgba(7, 14, 23, .99)),
+        var(--sidebar);
+}
+
+.brand-mark {
+    position: relative;
+    overflow: hidden;
+    border-radius: 50%;
+    border-width: 2px;
+}
+
+.brand-mark::after {
+    position: absolute;
+    inset: 5px;
+    border: 1px solid rgba(69, 217, 237, .28);
+    border-radius: 50%;
+    content: "";
+}
+
+.nav-item {
+    position: relative;
+    border-radius: 7px;
+}
+
+.nav-item.active::after {
+    position: absolute;
+    right: 8px;
+    width: 4px;
+    height: 4px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px var(--cyan);
+    content: "";
+}
+
+.topbar {
+    min-height: 64px;
+}
+
+.topbar-snapshot {
+    padding: 6px 17px 6px 0;
+}
+
+.topbar-snapshot b {
+    font-size: 12px;
+}
+
+.page-heading {
+    position: relative;
+}
+
+.page-heading h1 {
+    text-transform: capitalize;
+}
+
+.overview-map-panel {
+    position: relative;
+    border-radius: 16px;
+    background:
+        radial-gradient(circle at 38% 48%, rgba(69, 217, 237, .055), transparent 29%),
+        linear-gradient(145deg, rgba(14, 28, 42, .98), rgba(8, 17, 28, .98));
+}
+
+.overview-map-heading {
+    padding-bottom: 13px;
+    border-bottom: 1px solid rgba(105, 170, 214, .11);
+}
+
+.overview-map-heading h2 {
+    font-size: 19px;
+}
+
+.overview-map-frame {
+    border-radius: 12px;
+    background:
+        linear-gradient(rgba(69, 217, 237, .025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(69, 217, 237, .025) 1px, transparent 1px),
+        #07111b;
+    background-size: 32px 32px;
+}
+
+.overview-map-canvas {
+    height: clamp(350px, 34vw, 440px);
+}
+
+.overview-map-toolbar {
+    background:
+        linear-gradient(90deg, rgba(69, 217, 237, .04), transparent 45%),
+        rgba(8, 16, 26, .96);
+}
+
+.overview-country-panel {
+    border-radius: 12px;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(69, 217, 237, .09), transparent 36%),
+        linear-gradient(155deg, rgba(16, 30, 44, .96), rgba(8, 16, 26, .96));
+}
+
+.overview-country-topline {
+    font-size: 9px;
+    letter-spacing: .13em;
+}
+
+.overview-country-identity h3 {
+    font-size: 19px;
+}
+
+.overview-country-details {
+    flex: 1;
+}
+
+.kpi-card {
+    min-height: 138px;
+    border-radius: 12px;
+    background:
+        linear-gradient(135deg, rgba(69, 217, 237, .018), transparent 38%),
+        linear-gradient(145deg, rgba(18, 31, 45, .98), rgba(10, 18, 28, .98));
+}
+
+.kpi-card::after {
+    width: 42px;
+    height: 1px;
+    opacity: .85;
+}
+
+.kpi-value {
+    text-shadow: 0 7px 28px rgba(69, 217, 237, .08);
+}
+
+.panel {
+    border-radius: 12px;
+}
+
+.panel-heading {
+    align-items: center;
+}
+
+.panel-badge {
+    letter-spacing: .11em;
+}
+
+.dashboard-selection-actions {
+    padding: 10px 0 0;
+    border-top: 1px solid rgba(105, 170, 214, .1);
+}
+
+.overview-data-note {
+    border-radius: 8px;
+}
+
+.selected-country-card,
+.map-details,
+.table-wrap,
+.organization-card,
+.leader-card,
+.country-card {
+    box-shadow: inset 0 1px rgba(255,255,255,.022), 0 8px 22px rgba(0,0,0,.08);
+}
+
+.economic-ticker {
+    backdrop-filter: blur(16px);
+}
+
+@media (min-width: 761px) {
+    .sidebar {
+        width: 236px;
+    }
+
+    .main-content {
+        margin-left: 236px;
+    }
+
+    .economic-ticker {
+        left: 236px;
+    }
+}
+
+@media (max-width: 760px) {
+    body::before {
+        background-size: 28px 28px;
+    }
+
+    .sidebar {
+        box-shadow: 0 8px 28px rgba(0,0,0,.28);
+    }
+
+    .overview-map-heading h2 {
+        font-size: 17px;
+    }
+
+    .overview-map-canvas {
+        height: 290px;
+    }
+
+    .overview-map-panel {
+        border-radius: 12px;
+    }
+
+    .topbar-snapshot {
+        display: none;
+    }
+}
